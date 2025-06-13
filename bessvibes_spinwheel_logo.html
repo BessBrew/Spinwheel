@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>BessVibes Spin Wheel</title>
+  <style>
+    body, html { margin:0; overflow:hidden; background: #1e0f2f; }
+    #wheelCanvas { display:block; }
+    #result {
+      position:absolute; top:50%; left:50%; transform:translate(-50%,-50%);
+      font-family:sans-serif; font-size:48px; color:#fff;
+      text-shadow: 2px 2px 8px rgba(0,0,0,0.7);
+      opacity:0; transition: opacity 0.5s;
+    }
+    #logo {
+      position:absolute; top:50%; left:50%;
+      transform:translate(-50%, -50%);
+      width:200px; height:200px;
+      border-radius:50%;
+      background:url('LOGO_URL') no-repeat center/contain;
+      pointer-events:none;
+      transition: opacity 0.5s;
+    }
+  </style>
+</head>
+<body>
+  <canvas id="wheelCanvas" width="800" height="800"></canvas>
+  <div id="logo"></div>
+  <div id="result"></div>
+  <audio id="tick" src="https://actions.google.com/sounds/v1/cartoon/wood_plank_flicks.ogg"></audio>
+  <audio id="win" src="https://actions.google.com/sounds/v1/alarms/beep_short.ogg"></audio>
+
+  <script>
+    const config = {
+      slices: [
+        { label: "1x Gift Sub", weight: 20, color: "#9146FF" },
+        { label: "Channel Point Bonus", weight: 30, color: "#5B2DB7" },
+        { label: "Shout-Out", weight: 25, color: "#3E1F66" },
+        { label: "Nothing 🙃", weight: 25, color: "#2B1544" }
+      ],
+      autoHideMs: 5000,
+      size: 800,
+      themeFont: "'Segoe UI', sans-serif",
+      wheelThickness: 300
+    };
+
+    const canvas = document.getElementById('wheelCanvas');
+    const ctx = canvas.getContext('2d');
+    const resultDiv = document.getElementById('result');
+    const logoDiv = document.getElementById('logo');
+    const tickSound = document.getElementById('tick');
+    const winSound = document.getElementById('win');
+
+    let totalWeight = config.slices.reduce((sum, sl) => sum + sl.weight, 0);
+    let angleOffset = 0, spinning = false;
+
+    function drawWheel() {
+      const c = config.size/2, r = config.wheelThickness/2;
+      let cur = angleOffset;
+      ctx.clearRect(0,0,config.size,config.size);
+
+      config.slices.forEach(sl => {
+        const sliceA = (sl.weight/totalWeight)*2*Math.PI;
+        ctx.beginPath(); ctx.moveTo(c,c);
+        ctx.arc(c,c,r,cur,cur+sliceA);
+        ctx.fillStyle = sl.color;
+        ctx.fill();
+        ctx.save();
+        ctx.translate(c,c); ctx.rotate(cur+sliceA/2);
+        ctx.textAlign="right"; ctx.font="bold 24px "+config.themeFont;
+        ctx.fillStyle="#fff";
+        ctx.fillText(sl.label, r-10, 10);
+        ctx.restore();
+        cur += sliceA;
+      });
+      ctx.fillStyle="#fff";
+      ctx.beginPath();
+      ctx.moveTo(c,c-r+10);
+      ctx.lineTo(c-20,c-r+50);
+      ctx.lineTo(c+20,c-r+50);
+      ctx.fill();
+    }
+
+    function spin() {
+      if(spinning) return;
+      spinning = true;
+      resultDiv.style.opacity=0;
+      logoDiv.style.opacity=1;
+      winSound.pause(); winSound.currentTime=0;
+
+      const spinStart=Math.random()*5000+5000, spinTimeTotal=8000;
+      let spinTime=0;
+
+      function rotate(){
+        spinTime+=16;
+        const t=spinTime/spinTimeTotal;
+        const ease=(--t)*t*t+1;
+        angleOffset=(angleOffset+spinStart*ease/spinTimeTotal)%(2*Math.PI);
+        drawWheel();
+        tickSound.play().catch(()=>{});
+        if(spinTime<spinTimeTotal) requestAnimationFrame(rotate);
+        else finish();
+      }
+      rotate();
+    }
+
+    function finish(){
+      const finalA=(2*Math.PI-angleOffset+Math.PI/2)%(2*Math.PI);
+      let acc=0, winner=config.slices[0];
+      for(const sl of config.slices){
+        const sliceA=(sl.weight/totalWeight)*2*Math.PI;
+        if(finalA>=acc && finalA<acc+sliceA){winner=sl; break;}
+        acc+=sliceA;
+      }
+      resultDiv.textContent=`🎉 ${winner.label} 🎉`;
+      resultDiv.style.opacity=1;
+      winSound.play().catch(()=>{});
+      spinning=false;
+      logoDiv.style.opacity=0.5;
+      if(config.autoHideMs>0)
+        setTimeout(()=>resultDiv.style.opacity=0, config.autoHideMs);
+    }
+
+    window.addEventListener('message', e=>{ if(e.data?.type==='spin') spin(); });
+    drawWheel();
+  </script>
+</body>
+</html>
